@@ -75,6 +75,13 @@ class Compiler:
             print('キーボード：なし\n出力ファイル：なし')
 
 
+    def execute(self,argument):
+        '''
+        Popenの引数の指定
+        '''
+        return subprocess2.Popen(argument, stdout=PIPE, stdin=PIPE, shell=True)
+
+
     def output_code(self,fp,cfile):
         '''
         コードの内容をファイルに書き出す
@@ -82,9 +89,9 @@ class Compiler:
         fp:書き込みファイル
         cfile:実行するcファイル名
         '''
+
         try:
-            convert = subprocess2.Popen("./nkf32.exe -w " + cfile + ' > ' + TEMPCONV
-                , shell=True, stdout=PIPE, stderr=PIPE)
+            convert = execute("./nkf32.exe -w " + cfile + ' > ' + TEMPCONV)
             stdout, stderr = convert.communicate()
             code = open(TEMPCONV,'r')
             fp.write('exercise : ' + str(self.ex_num+1) + '\r\n')
@@ -115,8 +122,7 @@ class Compiler:
         '''
         print(u"コンパイル >> gcc -o " +
               cStudent + " " + cfile)
-        result = subprocess2.Popen("gcc -o " + cStudent + " " + TEMPCONV
-            , shell=True, stdout=PIPE, stderr=PIPE)
+        result = execute("gcc -o " + cStudent + " " + TEMPCONV)
         stdout, stderr = result.communicate()
         check = stderr.decode('utf-8')
         os.remove(TEMPCONV)
@@ -126,14 +132,6 @@ class Compiler:
             fp.write(check.encode('utf-8'))
             return True
         return False
-
-
-    def execute_subprocess(self,num, infile = ''):
-        '''
-        Popenの引数の指定
-        '''
-        return subprocess2.Popen('./' + num + '.exe' + infile
-                           , stdout=PIPE, stdin=PIPE, shell=True)
 
 
     def execute_program(self,num,fp):
@@ -146,10 +144,10 @@ class Compiler:
         for i in range(self.trial):
             fp.write('-----trial' + str(i+1) + '-----\r\n')
             if self.is_infile == True:
-                result = execute_subprocess(num
-                    ,' < input/ex'+str(self.ex_num+1)+'/trial'+str(i+1)+'.txt')
+                result = self.execute('./' + num + '.exe < input/ex'+ \
+                    str(self.ex_num+1)+'/trial'+str(i+1)+'.txt')
             else:
-                result = execute_subprocess(num)
+                result = self.execute('./' + num + '.exe')
             # 無限ループ対策
             if result.waitUpTo(TIMEOUT_SEC) == None:
                 print(u'無限ループです')
