@@ -28,6 +28,10 @@ import re
 import time
 import os
 import shutil
+import sys
+
+#
+DEBUG = True
 
 # 出力ファイル対応
 OUTPUT_FILE_NAME = ['out1.txt','out2.txt','out3.txt','out4.txt']
@@ -58,6 +62,7 @@ class Compiler:
     def execute_type(self):
         self.is_infile = False
         self.is_outfile = False
+        argument = input()
         '''
         実行形式の指定
         '''
@@ -79,7 +84,7 @@ class Compiler:
         '''
         Popenの引数の指定
         '''
-        return subprocess2.Popen(argument, stdout=PIPE, stdin=PIPE, shell=True)
+        return subprocess2.Popen(argument, stdout=PIPE, stdin=PIPE, stderr=PIPE, shell=True)
 
 
     def output_code(self,fp,cfile):
@@ -89,9 +94,11 @@ class Compiler:
         fp:書き込みファイル
         cfile:実行するcファイル名
         '''
-
         try:
-            convert = execute("./nkf32.exe -w " + cfile + ' > ' + TEMPCONV)
+            if DEBUG:
+                convert = self.execute("nkf -w " + cfile + ' > ' + TEMPCONV)
+            else:
+                convert = self.execute("./nkf32.exe -w " + cfile + ' > ' + TEMPCONV)
             stdout, stderr = convert.communicate()
             code = open(TEMPCONV,'r')
             fp.write('exercise : ' + str(self.ex_num+1) + '\r\n')
@@ -122,14 +129,21 @@ class Compiler:
         '''
         print(u"コンパイル >> gcc -o " +
               cStudent + " " + cfile)
-        result = execute("gcc -o " + cStudent + " " + TEMPCONV)
+        result = self.execute("gcc -o " + cStudent + " " + TEMPCONV)
         stdout, stderr = result.communicate()
-        check = stderr.decode('utf-8')
         os.remove(TEMPCONV)
-        if u'エラー' in check:
+        if isinstance(stderr,type(None)):
+            return False
+        check = stderr.decode('utf-8')
+        if 'エラー' in check:
             print(u'コンパイルエラーです')
             fp.write('-----Compile Error!-----\r\n')
             fp.write(check.encode('utf-8'))
+            return True
+        elif 'error' in check:
+            print(u'コンパイルエラーです')
+            fp.write('-----Compile Error!-----\r\n')
+            fp.write(check)
             return True
         return False
 
@@ -144,10 +158,17 @@ class Compiler:
         for i in range(self.trial):
             fp.write('-----trial' + str(i+1) + '-----\r\n')
             if self.is_infile == True:
-                result = self.execute('./' + num + '.exe < input/ex'+ \
-                    str(self.ex_num+1)+'/trial'+str(i+1)+'.txt')
+                if DEBUG:
+                    result = self.execute('./' + num + ' < input/ex'+ \
+                        str(self.ex_num+1)+'/trial'+str(i+1)+'.txt')
+                else:
+                    result = self.execute('./' + num + '.exe < input/ex'+ \
+                        str(self.ex_num+1)+'/trial'+str(i+1)+'.txt')
             else:
-                result = self.execute('./' + num + '.exe')
+                if DEBUG:
+                    result = self.execute('./' + num)
+                else:
+                    result = self.execute('./' + num + '.exe')
             # 無限ループ対策
             if result.waitUpTo(TIMEOUT_SEC) == None:
                 print(u'無限ループです')
@@ -157,9 +178,12 @@ class Compiler:
                 fp.write(INF_MESSAGE)
             else:
                 output, error = result.communicate()
-                fp.write(output)
+                fp.write(output.decode('utf-8'))
                 fp.write('\r\n')
-        os.remove('./' + str(num) + ".exe")
+        if DEBUG:
+            os.remove('./' + str(num))
+        else:
+            os.remove('./' + str(num) + ".exe")
 
 
     def write_output(self,fp):
@@ -184,7 +208,13 @@ class Compiler:
 
 def ex_detect(fpath,cStudent):
     fname = os.path.split(fpath)[1]
-    basename, ext = re.search('([0-9])\.(\w+)$', fpath)
+    if len(fname) == 0:
+        return -1
+    matchOBJ = re.search('([0-9])\.(\w+)$', fpath)
+    if isinstance(matchOBJ,type(None)):
+        return -1
+    basename = matchOBJ.group(1)
+    ext = matchOBJ.group(2)
     if not fpath.startswith('_'):
         if re.match(ext,'c(pp)?') != None:
             tasknum = int(basename)
@@ -197,7 +227,7 @@ def ex_detect(fpath,cStudent):
             return -1
 
 
-def main():
+def main(args):
     '''
     メイン
     '''
@@ -210,11 +240,11 @@ def main():
     # print('課題数')
     num_of_task = 4
     # num_of_task = input()
-
+    comp = []
     # 初期化
     for i in range(num_of_task):
         print('exercise ' + str(i))
-        comp[i] = Compiler()
+        comp.append(Compiler())
         comp[i].initialize(i)
 
     # ファイル探索
@@ -231,7 +261,8 @@ def main():
             for name in zipdata.namelist():
                 # 課題番号判定
                 # ついでにpptxも展開
-                if (ex_num = ex_detect(fpath,cStudent)) == -1:
+                ex_num = ex_detect(name,cStudent)
+                if ex_num == -1:
                     continue
                 # ファイル展開
                 zipdata.extract(name,path=EXPATH)
@@ -240,17 +271,17 @@ def main():
                 # 対象ソースコードをコンパイル
                 if comp[ex_num].compile_code(cStudent,EXPATH+name,outfile):
                     # 改行と改ページの挿入
-                    insert_newpage(outfile)
+                    comp[ex_num].insert_newpage(outfile)
                     continue
                 # 対象プログラムを実行
                 comp[ex_num].execute_program(cStudent,outfile)
                 if comp[ex_num].is_outfile:
                     comp[ex_num].write_output(outfile)
                 # 改行と改ページの挿入
-                insert_newpage(outfile)
+                comp[ex_num].insert_newpage(outfile)
         outfile.close()
     print(u'終了!')
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)
