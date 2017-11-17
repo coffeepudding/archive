@@ -5,9 +5,7 @@
 # 完成度はまだまだ低いです
 
 # 初期設定
-# 1.INPUT_FILE_NAMEにinputフォルダのコンソール入力を記述する
-# 2.EXPATHに出力ディレクトリを記述する(My Documentsみたいに空白があると動きません)
-# 3.OUTPUT_FILE_NAMEに出力ファイル名を入力する(未実装)
+# 1.inputフォルダ内のtxtを変更する
 
 # -----実行方法-----
 # 0.Zドライブのどっかにsubprocess2のフォルダと一緒に置く
@@ -18,20 +16,19 @@
 # 6.どっちもを利用するときは，引数にa
 # 7.「out_学生番号.txt」に出力される
 
+import csv
 import glob
 import os
-import time
+import re
+import shutil
 import subprocess2
 from subprocess2 import PIPE
-import zipfile
-import re
-import time
-import os
-import shutil
 import sys
+import time
+import zipfile
 
-#
-DEBUG = True
+# MACで動かすときはTrueに
+DEBUG = False
 
 # 出力ファイル対応
 OUTPUT_FILE_NAME = ['out1.txt','out2.txt','out3.txt','out4.txt']
@@ -40,7 +37,7 @@ EXPATH = os.getcwd() + '/temp/'
 ZIPPATH = './zip/'
 TEMP = './temp/'
 TEMPCONV = TEMP + 'conv.c'
-
+PREFIX = 'enc_'
 # 無限ループ発生時に書き出すメッセージ内容
 INF_MESSAGE = '''プログラムが終了しませんでした
 考えられる原因：無限ループ、終了条件の間違い
@@ -63,17 +60,39 @@ class Compiler:
         print('実行方法')
         self.execute_type()
         print('実行回数（実行結果例参考）')
-        self.trial = int(input())
+        if DEBUG:
+            self.trial = int(input())
+        else:
+            self.trial = int(raw_input())
+
+    def initialize2(self,i,exe,num):
+        '''
+        インスタンスの初期化
+        i:課題番号
+        '''
+        self.ex_num = i
+        print('実行方法')
+        self.execute_type(exe)
+        print('実行回数（実行結果例参考）')
+        self.trial = int(num)
 
 
-    def execute_type(self):
+    def execute_type(self,arg = ''):
         '''
         実行形式の指定
         キーボード入力と、出力ファイルについて保存する
         '''
         self.is_infile = False
         self.is_outfile = False
-        argument = input()
+        self.is_pptx = False
+        if len(arg) == 0:
+            if DEBUG:
+                argument = input()
+            else:
+                argument = raw_input()
+        else:
+            argument = arg
+
         if argument == 'r':
             print('キーボード：あり\n出力ファイル：なし')
             self.is_infile = True
@@ -84,6 +103,9 @@ class Compiler:
             print('キーボード：あり\n出力ファイル：あり')
             self.is_infile = True
             self.is_outfile = True
+        elif argument == 'p':
+            self.is_pptx = True
+            print('パワーポイント')
         else:
             print('キーボード：なし\n出力ファイル：なし')
 
@@ -96,7 +118,7 @@ class Compiler:
         return subprocess2.Popen(argument, stdout=PIPE, stdin=PIPE, stderr=PIPE, shell=True)
 
 
-    def output_code(self,fp,cfile):
+    def output_code(self,cfile,fp):
         '''
         コードの内容をファイルに書き出す
         globしているのは、zipfile展開時にpathがおかしくなるため
@@ -105,12 +127,13 @@ class Compiler:
         '''
         try:
             if DEBUG:
-                convert = self.execute("nkf -w " + cfile + ' > ' + TEMPCONV)
+                convert = self.execute("nkf -w " + TEMP + cfile + ' > ' + TEMPCONV)
             else:
-                convert = self.execute("./nkf32.exe -w " + cfile + ' > ' + TEMPCONV)
+                convert = self.execute("./nkf32.exe -w " + TEMP + cfile + ' > ' + TEMPCONV)
             stdout, stderr = convert.communicate()
             code = open(TEMPCONV,'r')
-            fp.write('exercise : ' + str(self.ex_num+1) + '\r\n')
+            fp.write('exercise:' + str(self.ex_num+1) + '\r\n')
+            fp.write('path:' + cfile + '\r\n')
             fp.write('-----code-----\r\n')
             for line in code:
                 fp.write(line)
@@ -141,14 +164,14 @@ class Compiler:
         fp:出力ファイル
         '''
         print(u"コンパイル >> gcc -o " +
-              cStudent + " " + cfile)
+              cStudent + " " + TEMPCONV)
         result = self.execute("gcc -o " + cStudent + " " + TEMPCONV)
         stdout, stderr = result.communicate()
         os.remove(TEMPCONV)
         if isinstance(stderr,type(None)):
             return False
         check = stderr.decode('utf-8')
-        if 'エラー' in check:
+        if u'エラー' in check:
             print(u'コンパイルエラーです')
             fp.write('-----Compile Error!-----\r\n')
             fp.write(check.encode('utf-8'))
@@ -193,14 +216,20 @@ class Compiler:
                 fp.write(INF_MESSAGE)
             else:
                 output, error = result.communicate()
-                fp.write(output.decode('utf-8'))
+                if DEBUG:
+                    fp.write(output.decode('utf-8'))
+                else:
+                    fp.write(output)
                 fp.write('\r\n')
                 if self.is_outfile == True:
                     self.write_output(fp)
-        if DEBUG:
-            os.remove('./' + str(num))
-        else:
-            os.remove('./' + str(num) + ".exe")
+        try:
+            if DEBUG:
+                os.remove('./' + str(num))
+            else:
+                os.remove('./' + str(num) + ".exe")
+        except:
+            print('削除失敗しました')
 
 
     def write_output(self,fp):
@@ -225,7 +254,7 @@ class Compiler:
             return False
 
 
-def ex_detect(fpath,cStudent,zipdata):
+def ex_detect(fpath,cStudent):
     '''
     課題番号を検出
     ついでにpptxも展開している
@@ -244,12 +273,15 @@ def ex_detect(fpath,cStudent,zipdata):
         if re.match(ext,'c(pp)?') != None:
             tasknum = int(basename)
             return tasknum-1
-        elif ext == 'pptx':
-            zipdata.extract(fpath,path=EXPATH)
-            shutil.copy2(TEMP + fpath, "./output/" + cStudent + fname)
-            return -1
         else:
             return -1
+
+
+# def pptx():
+#     ext == 'pptx':
+#     zipdata.extract(fpath,path=EXPATH)
+#     shutil.copy2(TEMP + fpath, "./output/" + cStudent + fname)
+#     return -1
 
 
 def main(args):
@@ -261,7 +293,13 @@ def main(args):
     print('キーボード入力ありの場合、r')
     print('出力ファイルありの場合、w')
     print('どっちもありの場合、w')
-
+    print('pptxの場合、p')
+    debug_input = []
+    if os.path.isfile('debug.txt'):
+        with open('debug.txt', 'r') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                debug_input.append(row)
     # print('課題数')
     num_of_task = 4
     # num_of_task = input()
@@ -269,9 +307,12 @@ def main(args):
     comp = []
     # メソッドの初期化
     for i in range(num_of_task):
-        print('exercise ' + str(i))
+        print('exercise ' + str(i+1))
         comp.append(Compiler())
-        comp[i].initialize(i)
+        if len(debug_input) == num_of_task:
+            comp[i].initialize2(i,debug_input[i][0],debug_input[i][1])
+        else:
+            comp[i].initialize(i)
 
     # ファイル探索
     zipdirlist = []
@@ -291,14 +332,14 @@ def main(args):
         with zipfile.ZipFile(zipfiledir) as zipdata:
             for name in zipdata.namelist():
                 # 課題番号判定ついでにpptxも展開
-                ex_num = ex_detect(name,cStudent,zipdata)
+                ex_num = ex_detect(name,cStudent)
                 # ソースコードじゃなかったら終了
                 if ex_num == -1:
                     continue
                 # ファイル展開
                 zipdata.extract(name,path=EXPATH)
                 # コードの内容をファイルに書き出す
-                comp[ex_num].output_code(outfile,TEMP+name)
+                comp[ex_num].output_code(name,outfile)
                 # 対象ソースコードをコンパイル
                 # コンパイルに失敗したらTrue
                 if comp[ex_num].compile_code(cStudent,EXPATH+name,outfile):
