@@ -50,8 +50,15 @@ INF_MESSAGE = '''プログラムが終了しませんでした
 TIMEOUT_SEC = 1
 
 class Compiler:
-
+    '''
+    勉強兼ねてのクラス化
+    理解できればそこそこ使える
+    '''
     def initialize(self,i):
+        '''
+        インスタンスの初期化
+        i:課題番号
+        '''
         self.ex_num = i
         print('実行方法')
         self.execute_type()
@@ -60,12 +67,13 @@ class Compiler:
 
 
     def execute_type(self):
+        '''
+        実行形式の指定
+        キーボード入力と、出力ファイルについて保存する
+        '''
         self.is_infile = False
         self.is_outfile = False
         argument = input()
-        '''
-        実行形式の指定
-        '''
         if argument == 'r':
             print('キーボード：あり\n出力ファイル：なし')
             self.is_infile = True
@@ -83,6 +91,7 @@ class Compiler:
     def execute(self,argument):
         '''
         Popenの引数の指定
+        argument:引数
         '''
         return subprocess2.Popen(argument, stdout=PIPE, stdin=PIPE, stderr=PIPE, shell=True)
 
@@ -116,6 +125,7 @@ class Compiler:
     def insert_newpage(self,fp):
         '''
         見やすいように改行と改ページを挿入する
+        fp:出力ファイル
         '''
         fp.write('\r\n')
         fp.write('-------------------------------------------------\r\n')
@@ -126,6 +136,9 @@ class Compiler:
         '''
         ソースコードをコンパイルする
         一応タイムアウトする
+        cStudent:学生番号
+        cfile:実行するコードのパス
+        fp:出力ファイル
         '''
         print(u"コンパイル >> gcc -o " +
               cStudent + " " + cfile)
@@ -151,6 +164,8 @@ class Compiler:
     def execute_program(self,num,fp):
         '''
         プログラムを実行し，ファイルに書き出す
+        num:学生番号
+        fp:出力ファイル
         '''
         print(u'実行 >> ' + str(num) + ".exe")
         fp.write('-----exercise' + str(self.ex_num+1) + '-----\r\n')
@@ -180,6 +195,8 @@ class Compiler:
                 output, error = result.communicate()
                 fp.write(output.decode('utf-8'))
                 fp.write('\r\n')
+                if self.is_outfile == True:
+                    self.write_output(fp)
         if DEBUG:
             os.remove('./' + str(num))
         else:
@@ -189,6 +206,7 @@ class Compiler:
     def write_output(self,fp):
         '''
         出力ファイルの内容をファイルに書き出す
+        fp:出力ファイル
         '''
         try:
             print(u'出力ファイル名 >> ' + OUTPUT_FILE_NAME[self.ex_num])
@@ -198,6 +216,7 @@ class Compiler:
             for line in output:
                 fp.write(line)
             fp.write('\r\n')
+            output.close()
             os.remove("./" + OUTPUT_FILE_NAME[self.ex_num])
             return True
         except:
@@ -207,6 +226,12 @@ class Compiler:
 
 
 def ex_detect(fpath,cStudent):
+    '''
+    課題番号を検出
+    ついでにpptxも展開している
+    fpath:ファイルパス(ディレクトリパスも来る)
+    cStudent:学生番号
+    '''
     fname = os.path.split(fpath)[1]
     if len(fname) == 0:
         return -1
@@ -240,8 +265,9 @@ def main(args):
     # print('課題数')
     num_of_task = 4
     # num_of_task = input()
+    # メソッド配列の作り方がイマイチわからない
     comp = []
-    # 初期化
+    # メソッドの初期化
     for i in range(num_of_task):
         print('exercise ' + str(i))
         comp.append(Compiler())
@@ -250,33 +276,37 @@ def main(args):
     # ファイル探索
     zipdirlist = []
     for x in os.listdir(ZIPPATH):
+        # zipファイルだけ取得
         if x.endswith('.zip'):
             # ファイルのパスをフルパスに変更
             zipdirlist.append(ZIPPATH + x)
 
+    # zipを1つずつ処理
     for zipfiledir in zipdirlist:
+        # 学生番号を取得する正規表現
         cStudent = re.search('[0-9]{8}', zipfiledir).group(0)
+        # outputのフォルダ内にout_12345678.txtが出来る
         outfile = open('output/out_' + cStudent + '.txt','w')
+        # zip内のファイルを1つずつ参照
         with zipfile.ZipFile(zipfiledir) as zipdata:
             for name in zipdata.namelist():
-                # 課題番号判定
-                # ついでにpptxも展開
+                # 課題番号判定ついでにpptxも展開
                 ex_num = ex_detect(name,cStudent)
+                # ソースコードじゃなかったら終了
                 if ex_num == -1:
                     continue
                 # ファイル展開
                 zipdata.extract(name,path=EXPATH)
                 # コードの内容をファイルに書き出す
-                comp[ex_num].output_code(outfile,TEMP + name)
+                comp[ex_num].output_code(outfile,TEMP+name)
                 # 対象ソースコードをコンパイル
+                # コンパイルに失敗したらTrue
                 if comp[ex_num].compile_code(cStudent,EXPATH+name,outfile):
                     # 改行と改ページの挿入
                     comp[ex_num].insert_newpage(outfile)
                     continue
                 # 対象プログラムを実行
                 comp[ex_num].execute_program(cStudent,outfile)
-                if comp[ex_num].is_outfile:
-                    comp[ex_num].write_output(outfile)
                 # 改行と改ページの挿入
                 comp[ex_num].insert_newpage(outfile)
         outfile.close()
