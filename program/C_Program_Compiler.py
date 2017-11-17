@@ -225,7 +225,7 @@ class Compiler:
             return False
 
 
-def ex_detect(fpath,cStudent):
+def ex_detect(fpath,cStudent,zipdata):
     '''
     課題番号を検出
     ついでにpptxも展開している
@@ -291,7 +291,7 @@ def main(args):
         with zipfile.ZipFile(zipfiledir) as zipdata:
             for name in zipdata.namelist():
                 # 課題番号判定ついでにpptxも展開
-                ex_num = ex_detect(name,cStudent)
+                ex_num = ex_detect(name,cStudent,zipdata)
                 # ソースコードじゃなかったら終了
                 if ex_num == -1:
                     continue
